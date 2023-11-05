@@ -349,7 +349,6 @@ static int zed_joystick_probe(struct platform_device *pdev)
 	int value, error;
 	int channel;
 	int range;
-	int fuzz, deadzone;
 	enum of_gpio_flags flags;
 
 	DBG("%s Probing...\n",__func__);
@@ -503,12 +502,10 @@ static int zed_joystick_probe(struct platform_device *pdev)
 	
 	//不映射  -32768  32767
 	//tr: Do not map as -32768  32767 (johnny: because this is from the adc readings?)
-	fuzz = ((range / 2) * 100) * 5 / 10000; // 5% fuzz
-	deadzone = ((range / 2) * 100) * 15 / 10000; // 15% deadzone
-	input_set_abs_params(input_dev, ABS_X, 0, range, fuzz, deadzone);
-	input_set_abs_params(input_dev, ABS_Y, 0, range, fuzz, deadzone);
-	input_set_abs_params(input_dev, ABS_RX, 0, range, fuzz, deadzone);
-	input_set_abs_params(input_dev, ABS_RY, 0, range, fuzz, deadzone);
+	input_set_abs_params(input_dev, ABS_X, 0, range, 0, 0);
+	input_set_abs_params(input_dev, ABS_Y, 0, range, 0, 0);
+	input_set_abs_params(input_dev, ABS_RX, 0, range, 0, 0);
+	input_set_abs_params(input_dev, ABS_RY, 0, range, 0, 0);
 
 	error = input_register_polled_device(poll_dev);
 	if (error) {
