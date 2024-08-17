@@ -37,6 +37,9 @@
 static int dbg_enable;
 module_param_named(dbg_level, dbg_enable, int, 0644);
 
+#define IP2315_JIFFIES	(1 * HZ) // 1s
+#define CHECK_SAMPLE_JIFFIES	(200 / (MSEC_PER_SEC / HZ))	 // 200ms
+#define MAX_COUNT   11   // 10 x200ms 2s
 #define DBG(args...) \
 	do { \
 		if (dbg_enable) { \
@@ -277,6 +280,9 @@ struct charger_platform_data {
 	u32 power_dc2otg;
 	u32 dc_det_level;
 	int dc_det_pin;
+	int dc_det_h_count;
+	int dc_det_l_count;
+	int dc_det_pre_level;
 	bool support_dc_det;
 	int virtual_power;
 	int sample_res;
@@ -304,6 +310,7 @@ struct rk817_charger {
 	struct delayed_work host_work;
 	struct delayed_work discnt_work;
 	struct delayed_work irq_work;
+	struct delayed_work ip2315_det_work;
 	struct notifier_block bc_nb;
 	struct notifier_block cable_cg_nb;
 	struct notifier_block cable_host_nb;
@@ -348,7 +355,7 @@ static enum power_supply_property rk817_usb_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 };
-
+static int  ip2315_charge_get_state(struct rk817_charger *charge);
 static int rk817_charge_ac_get_property(struct power_supply *psy,
 					enum power_supply_property psp,
 					union power_supply_propval *val)
@@ -379,6 +386,9 @@ static int rk817_charge_ac_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		val->intval = charge->max_chrg_current * 1000;	/* uA */
 		break;
+	case POWER_SUPPLY_PROP_IP2315_STATUS:
+		val->intval = ip2315_charge_get_state(charge);	
+		break;		
 	default:
 		ret = -EINVAL;
 		break;
@@ -915,26 +925,47 @@ static irqreturn_t rk817_charge_dc_det_isr(int irq, void *charger)
 	return IRQ_HANDLED;
 }
 
-static enum charger_t rk817_charge_get_dc_state(struct rk817_charger *charge)
+// static enum charger_t rk817_charge_get_dc_state(struct rk817_charger *charge)
+// {
+// 	int level;
+
+// 	if (!gpio_is_valid(charge->pdata->dc_det_pin))
+// 		return DC_TYPE_NONE_CHARGER;
+
+// 	level = gpio_get_value(charge->pdata->dc_det_pin);
+
+// 	return (level == charge->pdata->dc_det_level) ?
+// 		DC_TYPE_DC_CHARGER : DC_TYPE_NONE_CHARGER;
+// }
+static enum charger_t ip2315_charge_get_dc_state(struct rk817_charger *charge)
 {
-	int level;
 
-	if (!gpio_is_valid(charge->pdata->dc_det_pin))
-		return DC_TYPE_NONE_CHARGER;
-
-	level = gpio_get_value(charge->pdata->dc_det_pin);
-
-	return (level == charge->pdata->dc_det_level) ?
-		DC_TYPE_DC_CHARGER : DC_TYPE_NONE_CHARGER;
+    if(charge->pdata->dc_det_h_count>MAX_COUNT||charge->pdata->dc_det_l_count>MAX_COUNT){
+	return DC_TYPE_NONE_CHARGER;
+	}	  
+	return DC_TYPE_DC_CHARGER;
 }
-
+// 0 no change 1 charging  2 full
+static int  ip2315_charge_get_state(struct rk817_charger *charge)
+{
+int change_status=0;
+    if(charge->pdata->dc_det_h_count>MAX_COUNT){
+	change_status=2;
+	}else if(charge->pdata->dc_det_l_count>MAX_COUNT){
+	change_status=0;
+	}
+	else{	  
+	change_status=1;
+	}
+	return change_status;
+}
 static void rk817_charge_dc_det_worker(struct work_struct *work)
 {
 	enum charger_t charger;
 	struct rk817_charger *charge = container_of(work,
 			struct rk817_charger, dc_work.work);
 
-	charger = rk817_charge_get_dc_state(charge);
+	charger = ip2315_charge_get_dc_state(charge);//rk817_charge_get_dc_state(charge);
 	if (charger == DC_TYPE_DC_CHARGER) {
 		DBG("detect dc charger in..\n");
 		rk817_charge_set_chrg_param(charge, DC_TYPE_DC_CHARGER);
@@ -955,6 +986,44 @@ static void rk817_charge_dc_det_worker(struct work_struct *work)
 	}
 }
 
+static void ip2315_charge_dc_det_worker(struct work_struct *work)
+{
+	struct rk817_charger *charge = container_of(work,
+			struct rk817_charger, ip2315_det_work.work);
+	int dc_det_cur_level;		
+    dc_det_cur_level=gpio_get_value(charge->pdata->dc_det_pin);
+	
+
+	if(dc_det_cur_level!=charge->pdata->dc_det_pre_level){
+
+
+	if(charge->pdata->dc_det_pre_level){
+	charge->pdata->dc_det_h_count=0;
+	}else{
+	charge->pdata->dc_det_l_count=0;
+	}
+	charge->pdata->dc_det_pre_level=dc_det_cur_level;
+	
+	}else{
+	
+	if(dc_det_cur_level){
+	  if(charge->pdata->dc_det_h_count<=MAX_COUNT){
+	  charge->pdata->dc_det_h_count++;
+	  	queue_delayed_work(charge->dc_charger_wq, &charge->dc_work,
+			   msecs_to_jiffies(10));
+	  }
+	}else{
+	if(charge->pdata->dc_det_l_count<=MAX_COUNT){
+	charge->pdata->dc_det_l_count++;
+	queue_delayed_work(charge->dc_charger_wq, &charge->dc_work,
+			   msecs_to_jiffies(10));
+	}
+	}
+
+	}
+	
+	schedule_delayed_work(&charge->ip2315_det_work, CHECK_SAMPLE_JIFFIES); //200ms
+}
 static int rk817_charge_init_dc(struct rk817_charger *charge)
 {
 	int ret, level;
@@ -965,6 +1034,7 @@ static int rk817_charge_init_dc(struct rk817_charger *charge)
 				WQ_MEM_RECLAIM | WQ_FREEZABLE,
 				"rk817-dc-wq");
 	INIT_DELAYED_WORK(&charge->dc_work, rk817_charge_dc_det_worker);
+	INIT_DELAYED_WORK(&charge->ip2315_det_work, ip2315_charge_dc_det_worker);
 	charge->dc_charger = DC_TYPE_NONE_CHARGER;
 
 	if (!charge->pdata->support_dc_det)
@@ -986,11 +1056,15 @@ static int rk817_charge_init_dc(struct rk817_charger *charge)
 	}
 
 	level = gpio_get_value(charge->pdata->dc_det_pin);
+	
 	if (level == charge->pdata->dc_det_level)
 		charge->dc_charger = DC_TYPE_DC_CHARGER;
 	else
 		charge->dc_charger = DC_TYPE_NONE_CHARGER;
 
+charge->pdata->dc_det_h_count=0;		
+charge->pdata->dc_det_l_count=0;
+charge->pdata->dc_det_pre_level=gpio_get_value(charge->pdata->dc_det_pin);
 	if (level)
 		irq_flags = IRQF_TRIGGER_LOW;
 	else
@@ -1006,6 +1080,8 @@ static int rk817_charge_init_dc(struct rk817_charger *charge)
 
 	enable_irq_wake(dc_det_irq);
 
+		   
+schedule_delayed_work(&charge->ip2315_det_work, CHECK_SAMPLE_JIFFIES);
 	if (charge->dc_charger != DC_TYPE_NONE_CHARGER)
 		rk817_charge_set_chrg_param(charge, charge->dc_charger);
 
@@ -1671,6 +1747,7 @@ irq_fail:
 
 	cancel_delayed_work_sync(&charge->usb_work);
 	cancel_delayed_work_sync(&charge->dc_work);
+	cancel_delayed_work_sync(&charge->ip2315_det_work);
 	cancel_delayed_work_sync(&charge->irq_work);
 	destroy_workqueue(charge->usb_charger_wq);
 	destroy_workqueue(charge->dc_charger_wq);
@@ -1756,6 +1833,7 @@ static void rk817_charger_shutdown(struct platform_device *dev)
 	cancel_delayed_work_sync(&charge->usb_work);
 	cancel_delayed_work_sync(&charge->dc_work);
 	cancel_delayed_work_sync(&charge->irq_work);
+	cancel_delayed_work_sync(&charge->ip2315_det_work);
 	flush_workqueue(charge->usb_charger_wq);
 	flush_workqueue(charge->dc_charger_wq);
 

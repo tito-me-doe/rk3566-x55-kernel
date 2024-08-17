@@ -1021,6 +1021,9 @@
 
 		charger {
 			compatible = "rk817,charger";
+			dc_det_gpio = <&gpio3 RK_PB5 GPIO_ACTIVE_LOW>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&ip2315_det_pin>;
 			min_input_voltage = <4500>;
 			max_input_current = <2000>;
 			max_chrg_current = <2000>;
@@ -1029,12 +1032,6 @@
 			chrg_finish_cur = <300>;
 			virtual_power = <0>;
 			dc_det_adc = <0>;
-		/*	dc_det_gpio = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
-			charge_red_gpio = <&gpio3 RK_PC1 GPIO_ACTIVE_HIGH>;
-			charge_green_gpio = <&gpio3 RK_PC2 GPIO_ACTIVE_HIGH>;
-			charge_yellow_gpio = <&gpio3 RK_PC3 GPIO_ACTIVE_HIGH>; */
-			pinctrl-names = "default";
-			pinctrl-0 = <&charge_led_gpio>;
 			extcon = <&usb2phy0>;
 			gate_function_disable = <1>;
 		};
@@ -1071,7 +1068,6 @@
 	clock-frequency = <400000>;
 	i2c-scl-rising-time-ns = <138>;
 	i2c-scl-falling-time-ns = <4>;
-
 };
 
 &i2c5 {
@@ -1157,7 +1153,11 @@
 			rockchip,pins = <4 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
-
+	charger {
+		ip2315_det_pin: ip2315_det-pin {
+			rockchip,pins = <3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};		
 	lcd {
 		lcd_rst_gpio: lcd-rst-gpio {
 			rockchip,pins = <0 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>;
@@ -1258,11 +1258,11 @@
 					<4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>,
 					<4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_up>,
 					<4 RK_PB3 RK_FUNC_GPIO &pcfg_pull_up>,
-					<4 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>,										
 					<4 RK_PA6 RK_FUNC_GPIO &pcfg_pull_up>,
-					<3 RK_PB6 RK_FUNC_GPIO &pcfg_pull_up>,
-					<3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_up>,
-					<3 RK_PB7 RK_FUNC_GPIO &pcfg_pull_up>;
+					<3 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>,
+					<3 RK_PD4 RK_FUNC_GPIO &pcfg_pull_up>,
+					<3 RK_PD5 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 };

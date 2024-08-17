@@ -2017,7 +2017,28 @@ static void rk817_bat_get_chrg_psy(struct rk817_battery_device *battery)
 		class_for_each_device(power_supply_class, NULL, (void *)battery,
 				      rk817_bat_get_ac_psy);
 }
+static int rk817_bat_get_ip2315_charge_state(struct rk817_battery_device *battery)
+{
+	union power_supply_propval val;
+	int ret,ip2315_charge_state=0;
+	struct power_supply *psy;
 
+	if (!battery->ac_psy)
+		rk817_bat_get_chrg_psy(battery);
+
+
+	psy = battery->ac_psy;
+	if (psy) {
+		ret = psy->desc->get_property(psy, POWER_SUPPLY_PROP_IP2315_STATUS,
+					      &val);
+		if (!ret)
+			ip2315_charge_state = val.intval;
+	}
+
+	DBG("%s: ip2315_charge_state=%d\n",__func__, ip2315_charge_state);
+
+	return ip2315_charge_state;
+}
 static int rk817_bat_get_charge_state(struct rk817_battery_device *battery)
 {
 	union power_supply_propval val;
@@ -2055,6 +2076,9 @@ static int rk817_get_capacity_leve(struct rk817_battery_device *battery)
 
 	if (battery->pdata->bat_mode == MODE_VIRTUAL)
 		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	else if(rk817_bat_get_ip2315_charge_state(battery)==2){
+		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+		}		
 
 	dsoc = (battery->dsoc + 500) / 1000;
 	if (dsoc < 1)
@@ -2099,14 +2123,24 @@ static int rk817_battery_get_property(struct power_supply *psy,
 		val->intval = battery->current_avg * 1000;/*uA*/
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_CURRENT * 1000;
+		else if(rk817_bat_get_ip2315_charge_state(battery)==2){
+		val->intval = VIRTUAL_CURRENT * 1000;
+		}		
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		val->intval = battery->voltage_avg * 1000;/*uV*/
+		
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_VOLTAGE * 1000;
+		else if(rk817_bat_get_ip2315_charge_state(battery)==2){
+		val->intval = VIRTUAL_VOLTAGE * 1000;
+		}		
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = (battery->dsoc  + 500) / 1000;
+		if(rk817_bat_get_ip2315_charge_state(battery)==2){
+		val->intval = 100;
+		}		
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_SOC;
 		break;
@@ -2124,6 +2158,9 @@ static int rk817_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_STATUS;
+	    else if(rk817_bat_get_ip2315_charge_state(battery)==2){
+		val->intval = POWER_SUPPLY_STATUS_FULL;
+		}		
 		else if (battery->dsoc == 100 * 1000)
 			val->intval = POWER_SUPPLY_STATUS_FULL;
 		else {
