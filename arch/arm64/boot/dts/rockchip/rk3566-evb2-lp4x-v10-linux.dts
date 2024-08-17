@@ -16,13 +16,14 @@
 #include "rk3568-android.dtsi"
 //#include "lcd/lcd_H546TAN01_720x1280_mipi_dsi0.dtsi"
 //#include "lcd/lcd_axs1832_auo55_720x1280_mipi_dsi0.dtsi"
-#include "lcd/lcd_HX8394F_720x1280_mipi_dsi0.dtsi"
+//#include "lcd/lcd_HX8394F_720x1280_mipi_dsi0.dtsi"
 / {
-	model = "Powkiddy x55";
+	model = "GameMT E6 Plus";
 	compatible = "rockchip,rk3566-rk817-tablet", "rockchip,rk3566";
-/*
+
 	adc_keys: adc-keys {
 		compatible = "adc-keys";
+		status = "okay";
 		io-channels = <&saradc 0>;
 		io-channel-names = "buttons";
 		keyup-threshold-microvolt = <1800000>;
@@ -39,74 +40,175 @@
 			linux,code = <KEY_VOLUMEDOWN>;
 			press-threshold-microvolt = <297500>;
 		};
+
+		esc-key {
+			linux,code = <KEY_ESC>;
+			label = "esc";
+			press-threshold-microvolt = <824000>;
+		};
+
+		select-key {
+			linux,code = <KEY_RIGHTSHIFT>;
+			label = "select";
+			press-threshold-microvolt = <1218000>;
+		};
+
+		start-key {
+			linux,code = <KEY_ENTER>;
+			label = "start";
+			press-threshold-microvolt = <1516000>;
+		};
 	};
-*/
 
-	zed_joystick {
-		compatible = "zed,joystick";
-		io-channels = <&saradc 0>,<&saradc 1>,<&saradc 2>, <&saradc 3>;
-		io-channel-names = "button0","button1","button2","button3";
-		keyup-threshold-microvolt = <1800000>;
-		poll-interval = <30>;
-		debounce-interval = <100>;	
+	joypad: singleadc-joypad {
+		compatible = "singleadc-joypad";
+
+		joypad-name = "retrogame_joypad";
+		joypad-product = <0x1101>;
+		joypad-revision = <0x0100>;
+
+		status = "okay";
+
+		/* gpio pincontrol setup */
 		pinctrl-names = "default";
-		pinctrl-0 = <&gpio_key_pin>;
-	//	pinctrl-0 = <&gpio_key_pin &vcc5v0_otg_en>;
+		pinctrl-0 = <&btn_pins>;
 
-		//外置USB手柄应晚于板载摇杠初始化,否则会抢占默认手柄
-		otg-gpio = <&gpio4 RK_PC5 GPIO_ACTIVE_HIGH>;
+		/* Analog mux define */
+		io-channel-names = "amux_adc";
+		io-channels = <&saradc 3>;
 
-	//	gpio-key-num = <18>;
-		//映射的键值写在驱动里面了
-		key-gpios = <&gpio3 RK_PC6 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
-			<&gpio3 RK_PC7 GPIO_ACTIVE_LOW>,//BTN_TR2
-			<&gpio3 RK_PD0 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_LEFTSHOULDER
-			<&gpio3 RK_PD1 GPIO_ACTIVE_LOW>,//BTN_TL2
-			<&gpio3 RK_PD2 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_A
-			<&gpio3 RK_PD3 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_B
-			<&gpio3 RK_PD4 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_X
-			<&gpio3 RK_PD5 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_Y
-			<&gpio3 RK_PD6 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_DPAD_LEFT
-			<&gpio3 RK_PD7 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_DPAD_RIGHT
-			<&gpio4 RK_PA0 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_DPAD_UP
-			<&gpio4 RK_PA1 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_DPAD_DOWN
-			<&gpio4 RK_PA2 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_BACK(select)
-			<&gpio4 RK_PA3 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_START
-			<&gpio4 RK_PA4 GPIO_ACTIVE_LOW>,//KEY_VOLUMEUP
-			<&gpio4 RK_PA5 GPIO_ACTIVE_LOW>,//KEY_VOLUMEDOWN
-			<&gpio4 RK_PA7 GPIO_ACTIVE_LOW>,//SDL_CONTROLLER_BUTTON_LEFTSTICK
-			<&gpio4 RK_PB0 GPIO_ACTIVE_LOW>;//SDL_CONTROLLER_BUTTON_RIGHTSTICK
+		/* adc mux channel count */
+		amux-count = <4>;
+		/* adc mux select(a,b) gpio */
+		amux-a-gpios = <&gpio4 RK_PB6 GPIO_ACTIVE_LOW>;
+		amux-b-gpios = <&gpio4 RK_PB5 GPIO_ACTIVE_LOW>;
+		/* adc mux enable gpio */
+		amux-en-gpios = <&gpio4 RK_PB7 GPIO_ACTIVE_LOW>;
 
+		/* adc calculate scale */
+		button-adc-scale = <2>;
 
-		left-x {
-			label = "left x";
-			adc-chan = <0>;
-			linux,code = <ABS_X>;
-			press-threshold-microvolt = <1750>;
+		/* adc deadzone range  */
+		button-adc-deadzone = <64>;
+
+		/*
+		  specifies fuzz value that is used to filter noise from
+		  the event stream.
+		*/
+		button-adc-fuzz = <32>;
+		button-adc-flat = <32>;
+
+		/*
+		  Analog Stick data tuning value(precent)
+		  p = positive direction, n = negative direction
+		  report value = (real_adc_data * tuning_value) / 100
+		*/
+		abs_x-p-tuning = <450>;
+		abs_x-n-tuning = <450>;
+
+		abs_y-p-tuning = <450>;
+		abs_y-n-tuning = <450>;
+
+		abs_rx-p-tuning = <450>;
+		abs_rx-n-tuning = <450>;
+
+		abs_ry-p-tuning = <450>;
+		abs_ry-n-tuning = <450>;
+
+		/* poll device interval (ms), adc read interval */
+		poll-interval = <10>;
+
+		/* gpio button auto repeat set value : default disable */
+		/*
+			autorepeat;
+		*/
+		sw1 {
+			gpios = <&gpio4 RK_PB3 GPIO_ACTIVE_LOW>;
+			label = "GPIO DPAD-UP"; //B
+			linux,code = <BTN_DPAD_UP>;
 		};
-
-		left-y {
-			label = "left y";
-			adc-chan = <1>;
-			linux,code = <ABS_Y>;
-			press-threshold-microvolt = <1750>;
+		sw2 {
+			gpios = <&gpio4 RK_PB4 GPIO_ACTIVE_LOW>;
+			label = "GPIO DPAD-DOWN";//dpad_right
+			linux,code = <BTN_DPAD_DOWN>;
 		};
-
-		right-x {
-			label = "right x";
-			adc-chan = <2>;
-			linux,code = <ABS_RX>;
-			press-threshold-microvolt = <1750>;
+		sw3 {
+			gpios = <&gpio4 RK_PB1 GPIO_ACTIVE_LOW>;
+			label = "GPIO DPAD-LEFT";//left_joystick
+			linux,code = <BTN_DPAD_LEFT>;
 		};
-
-		right-y {
-			label = "right y";
-			adc-chan = <3>;
-			linux,code = <ABS_RY>;
-			press-threshold-microvolt = <1750>;
+		sw4 {
+			gpios = <&gpio4 RK_PB2 GPIO_ACTIVE_LOW>;
+			label = "GPIO DPAD-RIGHT";//right_joystick
+			linux,code = <BTN_DPAD_RIGHT>;
 		};
-        };  
-	
+		sw5 {
+			gpios = <&gpio4 RK_PA7 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN-A";//x
+			linux,code = <BTN_SOUTH>;
+		};
+		sw6 {
+			gpios = <&gpio4 RK_PA6 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN-B";//A
+			linux,code = <BTN_EAST>;
+		};
+		
+		sw7 {
+			gpios = <&gpio4 RK_PA5 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN-X";//y
+			linux,code = <BTN_NORTH>;
+		};
+		sw8 {
+			gpios = <&gpio4 RK_PB0 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN-Y";//dpad_left
+			linux,code = <BTN_WEST>;
+		};
+		sw9 {
+			gpios = <&gpio3 RK_PB6 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_SELECT";
+			linux,code = <BTN_SELECT>;
+		};
+		sw10 {
+			gpios = <&gpio3 RK_PB5 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_START";
+			linux,code = <BTN_START>;
+		};
+		sw11 {
+			gpios = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_F";
+			linux,code = <BTN_MODE>;
+		};
+		sw12 {
+			gpios = <&gpio4 RK_PA1 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_TL";//ok
+			linux,code = <BTN_TL>;
+		};
+		sw13 {
+			gpios = <&gpio4 RK_PA4 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_TR2"; //BTN_TL2
+			linux,code = <BTN_TR2>;
+		};
+		sw14 {
+			gpios = <&gpio4 RK_PA2 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_TL2";//BTN_TR
+			linux,code = <BTN_TL2>;
+		};
+		sw15 {
+			gpios = <&gpio4 RK_PA3 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_TR";//BTN_TR2
+			linux,code = <BTN_TR>;
+		};
+		sw16 {
+			gpios = <&gpio4 RK_PC0 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_THUMBL";//dpad_up
+			linux,code = <BTN_THUMBL>;
+		};
+		sw17 {
+			gpios = <&gpio4 RK_PC1 GPIO_ACTIVE_LOW>;
+			label = "GPIO BTN_THUMBR";//dpad_down
+			linux,code = <BTN_THUMBR>;
+		};
+	};
 
 	backlight: backlight {
 		compatible = "pwm-backlight";
@@ -150,15 +252,15 @@
 
 	charge-animation {
 		compatible = "rockchip,uboot-charge";
-		rockchip,uboot-charge-on = <1>;
+		rockchip,uboot-charge-on = <0>;
 		rockchip,android-charge-on = <0>;
 		rockchip,uboot-low-power-voltage = <3350>;
 		rockchip,screen-on-voltage = <3400>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	flash_rgb13h: flash-rgb13h {
-		status = "okay";
+		status = "disabled";
 		compatible = "led,rgb13h";
 		label = "gpio-flash";
 		pinctrl-names = "default";
@@ -171,31 +273,22 @@
 		rockchip,camera-module-facing = "back";
 	};
 
-	vcc5v0_otg: vcc5v0-otg-regulator {
-		compatible = "regulator-fixed";
-		enable-active-high;
-		gpio = <&gpio4 RK_PC5 GPIO_ACTIVE_HIGH>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&vcc5v0_otg_en>;
-		regulator-name = "vcc5v0_otg";
-	};
-
-	vcc5v0_host: vcc5v0-host-regulator {
-		compatible = "regulator-fixed";
-		enable-active-high;
-		gpio = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&vcc5v0_host_en>;
-		regulator-name = "vcc5v0_host";
-		regulator-always-on;
-		regulator-boot-on;
-	};
-
 	rk817-sound {
 		compatible = "simple-audio-card";
 		simple-audio-card,format = "i2s";
 		simple-audio-card,name = "rockchip,rk817-codec";
 		simple-audio-card,mclk-fs = <256>;
+		simple-audio-card,widgets =
+			"Microphone", "Mic Jack",
+			"Headphone", "Headphones",
+			"Speaker", "Speaker";
+		simple-audio-card,routing =
+			"MICL", "Mic Jack",
+			"Headphones", "HPOL",
+			"Headphones", "HPOR",
+			"Speaker", "SPKO";
+		simple-audio-card,hp-det-gpio = <&gpio2 RK_PC6 GPIO_ACTIVE_HIGH>;
+		simple-audio-card,pin-switches = "Speaker","Headphones";
 
 		simple-audio-card,cpu {
 			sound-dai = <&i2s1_8ch>;
@@ -280,6 +373,32 @@
 			3300000 0x1>;
 	};
 
+	leds: gpio-leds {
+                compatible = "gpio-leds";
+                pinctrl-names = "default";
+                pinctrl-0 =<&leds_gpio>;
+
+				left_joystick {
+					gpios = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
+					default-state="on";
+                };
+
+                right_joystick {
+					gpios = <&gpio4 RK_PC5 GPIO_ACTIVE_HIGH>;
+					default-state="on";
+                };
+				
+                left_below {
+					gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_HIGH>;
+					default-state="on";
+                };
+
+				right_below {
+					gpios = <&gpio4 RK_PC3 GPIO_ACTIVE_HIGH>;
+					default-state="on";
+                };			
+	};
+
 	wireless-wlan {
 		compatible = "wlan-platdata";
 		rockchip,grf = <&grf>;
@@ -359,14 +478,244 @@
 
 &dsi0 {
 	status = "okay";
-	dsi0_panel: panel@0 {
+	//	rockchip,dual-channel = <&dsi1>;
+	
+	//rockchip,lane-rate = <1000>;
+ 	dsi0_panel: panel@0 {
+		compatible ="simple-panel-dsi";
+		reg = <0>;
+		reset-delay-ms = <60>;
+		enable-delay-ms = <120>;
+		prepare-delay-ms = <60>;
+		init-delay-ms = <60>;
+		unprepare-delay-ms = <60>;
+		disable-delay-ms = <60>;
+		
 		backlight = <&backlight>;
 	//	power_vsx-gpios = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>;
 		enable-gpios = <&gpio0 RK_PC7 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpio0 RK_PD5 GPIO_ACTIVE_LOW>;
-	//	pinctrl-names = "default";
-	//	pinctrl-0 = <&lcd0_rst_gpio>;
+		reset-gpios = <&gpio0 RK_PA6 GPIO_ACTIVE_LOW>;
+
+		rotation = <270>;
+
+		dsi,flags = <(MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+			MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_EOT_PACKET)>;
+		dsi,format = <MIPI_DSI_FMT_RGB888>;
+		dsi,lanes  = <4>;
+		panel-init-sequence = [
+			39 00 04 FF 98 81 07
+			15 00 02 03 20
+			15 00 02 04 06
+			15 00 02 05 00
+			15 00 02 06 01
+			15 00 02 07 00
+			15 00 02 08 00
+			15 00 02 09 00
+			15 00 02 0A 00
+			15 00 02 0B 2F
+			15 00 02 0C 00
+			15 00 02 0D 00
+			15 00 02 0E 00
+			15 00 02 0F 00
+			15 00 02 10 40
+			15 00 02 11 02
+			15 00 02 12 05
+			15 00 02 13 00
+			15 00 02 14 00
+			15 00 02 15 00
+			15 00 02 16 2F
+			15 00 02 17 2F
+			15 00 02 18 00
+			15 00 02 19 00
+			15 00 02 1A 00
+			15 00 02 1B 50
+			15 00 02 1C BC
+			15 00 02 1D 0C
+			15 00 02 1E 00
+			15 00 02 1F 00
+			15 00 02 20 00
+			15 00 02 21 00
+			15 00 02 22 00
+			15 00 02 23 C0
+			15 00 02 24 30
+			15 00 02 25 00
+			15 00 02 26 00
+			15 00 02 27 03
+			15 00 02 30 01
+			15 00 02 31 23
+			15 00 02 32 45
+			15 00 02 33 67
+			15 00 02 34 89
+			15 00 02 35 AB
+			15 00 02 36 01
+			15 00 02 37 23
+			15 00 02 38 45
+			15 00 02 39 67
+			15 00 02 3A 89
+			15 00 02 3B AB
+			15 00 02 3C CD
+			15 00 02 3D EF
+			15 00 02 50 11
+			15 00 02 51 06
+			15 00 02 52 0C
+			15 00 02 53 0D
+			15 00 02 54 0E
+			15 00 02 55 0F
+			15 00 02 56 02
+			15 00 02 57 02
+			15 00 02 58 02
+			15 00 02 59 02
+			15 00 02 5A 02
+			15 00 02 5B 02
+			15 00 02 5C 02
+			15 00 02 5D 02
+			15 00 02 5E 02
+			15 00 02 5F 02
+			15 00 02 60 05
+			15 00 02 61 05
+			15 00 02 62 05
+			15 00 02 63 02
+			15 00 02 64 01
+			15 00 02 65 00
+			15 00 02 66 08
+			15 00 02 67 08
+			15 00 02 68 0C
+			15 00 02 69 0D
+			15 00 02 6A 0E
+			15 00 02 6B 0F
+			15 00 02 6C 02
+			15 00 02 6D 02
+			15 00 02 6E 02
+			15 00 02 6F 02
+			15 00 02 70 02
+			15 00 02 71 02
+			15 00 02 72 02
+			15 00 02 73 02
+			15 00 02 74 02
+			15 00 02 75 02
+			15 00 02 76 05
+			15 00 02 77 05
+			15 00 02 78 05
+			15 00 02 79 02
+			15 00 02 7A 01
+			15 00 02 7B 00
+			15 00 02 7C 06
+			39 00 04 FF 98 81 08
+			15 00 02 76 B4
+			15 00 02 78 02
+			15 00 02 74 2B
+			15 00 02 8E 15
+			15 00 02 40 01
+			15 00 02 84 81
+			15 00 02 72 25
+			15 00 02 E3 75
+			15 00 02 7D CB
+			15 00 02 7E 49
+			15 00 02 49 10
+			15 00 02 32 05
+			15 00 02 3C 05
+			39 00 04 FF 98 81 01
+			15 00 02 22 0A
+			15 00 02 43 01
+			15 00 02 53 82
+			15 00 02 55 85
+			15 00 02 50 B9
+			15 00 02 51 BA
+			15 00 02 31 00
+			15 00 02 A0 00
+			15 00 02 A1 14
+			15 00 02 A2 2B
+			15 00 02 A3 16
+			15 00 02 A4 1C
+			15 00 02 A5 2E
+			15 00 02 A6 18
+			15 00 02 A7 20
+			15 00 02 A8 78
+			15 00 02 A9 20
+			15 00 02 AA 2A
+			15 00 02 AB 83
+			15 00 02 AC 25
+			15 00 02 AD 1B
+			15 00 02 AE 54
+			15 00 02 AF 2B
+			15 00 02 B0 2B
+			15 00 02 B1 4F
+			15 00 02 B2 67
+			15 00 02 B3 39
+			15 00 02 C0 00
+			15 00 02 C1 14
+			15 00 02 C2 2B
+			15 00 02 C3 16
+			15 00 02 C4 1C
+			15 00 02 C5 2E
+			15 00 02 C6 18
+			15 00 02 C7 20
+			15 00 02 C8 78
+			15 00 02 C9 20
+			15 00 02 CA 2A
+			15 00 02 CB 83
+			15 00 02 CC 25
+			15 00 02 CD 1B
+			15 00 02 CE 54
+			15 00 02 CF 2B
+			15 00 02 D0 2B
+			15 00 02 D1 4F
+			15 00 02 D2 67
+			15 00 02 D3 39
+			39 00 04 FF 98 81 00
+			05 78 01 11
+			05 14 01 29
+		];
+
+		panel-exit-sequence = [
+			05 10 01 28
+			05 20 01 10
+		];
+
+		disp_timings0: display-timings {
+			native-mode = <&dsi0_timing0>;
+			dsi0_timing0: timing0 {
+				clock-frequency = <66000000>;
+				hactive = <720>;
+				vactive = <1280>;
+				hfront-porch = <50>;
+				hsync-len = <20>;
+				hback-porch = <50>;
+				vfront-porch = <10>;
+				vsync-len = <4>;
+				vback-porch = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+				};
+			};
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				panel_in_dsi: endpoint {
+					remote-endpoint = <&dsi_out_panel>;
+				};
+			};
+		};
 	};
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+			dsi_out_panel: endpoint {
+				remote-endpoint = <&panel_in_dsi>;
+			};
+		};
+	};
+
 };
 
 &dsi0_in_vp0 {
@@ -691,25 +1040,25 @@
 
 		battery {
 			compatible = "rk817,battery";
-			ocv_table = <3400 3553 3621 3688 3735 3768 3801
-				     3826 3843 3857 3878 3904 3934 3972
-				     4006 4020 4030 4044 4059 4083 4138>;
-			design_capacity = <3527>;
-			design_qmax = <3880>;
-			bat_res = <91>;
+			ocv_table = <3500 3524 3552 3579 3601 3618 3635
+				     3656 3682 3717 3764 3815 3854 3886 
+				     3914 3958 4003 4027 4054 4102 4176>;
+			design_capacity = <4605>;
+			design_qmax = <5500>;
+			bat_res = <82>;
 			sleep_enter_current = <150>;
 			sleep_exit_current = <180>;
 			sleep_filter_current = <100>;
-			power_off_thresd = <3350>;
-			zero_algorithm_vol = <3300>;
+			power_off_thresd = <3500>;
+			zero_algorithm_vol = <3850>;
 			max_soc_offset = <60>;
 			monitor_sec = <5>;
 			sample_res = <10>;
 			virtual_power = <0>;
-		//	dc_det_gpio = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;//uboot使用
-			charge_red_gpio = <&gpio4 RK_PB4 GPIO_ACTIVE_HIGH>;//充电指示灯 红
-			charge_green_gpio = <&gpio4 RK_PB5 GPIO_ACTIVE_HIGH>;//充电指示灯 绿
-			charge_yellow_gpio = <&gpio4 RK_PB6 GPIO_ACTIVE_HIGH>;//充电指示灯 黄   
+		/*	dc_det_gpio = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;//uboot使用
+			charge_red_gpio = <&gpio3 RK_PC1 GPIO_ACTIVE_HIGH>;
+			charge_green_gpio = <&gpio3 RK_PC2 GPIO_ACTIVE_HIGH>;
+			charge_yellow_gpio = <&gpio3 RK_PC3 GPIO_ACTIVE_HIGH>;*/
 		};
 
 		charger {
@@ -722,10 +1071,10 @@
 			chrg_finish_cur = <300>;
 			virtual_power = <0>;
 			dc_det_adc = <0>;
-		//	dc_det_gpio = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
-			charge_red_gpio = <&gpio4 RK_PB4 GPIO_ACTIVE_HIGH>;//充电指示灯 红
-			charge_green_gpio = <&gpio4 RK_PB5 GPIO_ACTIVE_HIGH>;//充电指示灯 绿
-			charge_yellow_gpio = <&gpio4 RK_PB6 GPIO_ACTIVE_HIGH>;//充电指示灯 黄   
+		/*	dc_det_gpio = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
+			charge_red_gpio = <&gpio3 RK_PC1 GPIO_ACTIVE_HIGH>;
+			charge_green_gpio = <&gpio3 RK_PC2 GPIO_ACTIVE_HIGH>;
+			charge_yellow_gpio = <&gpio3 RK_PC3 GPIO_ACTIVE_HIGH>; */
 			pinctrl-names = "default";
 			pinctrl-0 = <&charge_led_gpio>;
 			extcon = <&usb2phy0>;
@@ -917,43 +1266,45 @@
 			rockchip,pins = <2 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
-	usb {
-         vcc5v0_host_en: vcc5v0-host-en {
-                 rockchip,pins = <4 RK_PC4 RK_FUNC_GPIO &pcfg_pull_up>;
-         };
 
-         vcc5v0_otg_en: vcc5v0-otg-en {
-                 rockchip,pins = <4 RK_PC5 RK_FUNC_GPIO &pcfg_pull_up>;
-         };
+	gpio-leds {
+		leds_gpio: leds-gpio {
+			rockchip,pins =
+				<0 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>,
+				<4 RK_PC3 RK_FUNC_GPIO &pcfg_pull_none>,
+				<4 RK_PC4 RK_FUNC_GPIO &pcfg_pull_none>,
+				<4 RK_PC5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
 	};
+
 	led {
 		charge_led_gpio:charge-led-gpio{
-                 rockchip,pins = <4 RK_PB4 RK_FUNC_GPIO &pcfg_pull_none>,
-                 		 <4 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>,
-                                 <4 RK_PB6 RK_FUNC_GPIO &pcfg_pull_none>;
+                 rockchip,pins = <3 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>,
+                 		 <3 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>,
+                                 <3 RK_PC3 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	
 	};
-	buttons {
-		gpio_key_pin: gpio-key-pin {
-			rockchip,pins = <3 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PC7 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD0 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD1 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD2 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD4 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD5 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD6 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <3 RK_PD7 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA0 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA1 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA2 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA5 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PA7 RK_FUNC_GPIO &pcfg_pull_up>,
-			                <4 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
+	btns {
+		btn_pins: btn-pins {
+			rockchip,pins = 
+					<4 RK_PA7 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PB2 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PC0 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PC1 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PA5 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PB1 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PA1 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PA2 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PB3 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>,
+					<4 RK_PA6 RK_FUNC_GPIO &pcfg_pull_up>,
+					<3 RK_PB6 RK_FUNC_GPIO &pcfg_pull_up>,
+					<3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_up>,
+					<3 RK_PB7 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 };
@@ -1112,13 +1463,39 @@
 };
 
 &u2phy0_otg {
-	vbus-supply = <&vcc5v0_otg>;
 	status = "okay";
 };
 
 &u2phy0_host {
 	status = "okay";
-	phy-supply = <&vcc5v0_host>;
+};
+
+&u2phy1_host {
+	status = "okay";
+};
+
+&u2phy1_otg {
+	status = "okay";
+};
+
+&usb2phy1 {
+	status = "okay";
+};
+
+&usb_host0_ehci {
+	status = "okay";
+};
+
+&usb_host0_ohci {
+	status = "okay";
+};
+
+&usb_host1_ehci {
+	status = "okay";
+};
+
+&usb_host1_ohci {
+	status = "okay";
 };
 
 &combphy1_usq {
