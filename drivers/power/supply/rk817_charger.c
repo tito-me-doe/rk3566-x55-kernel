@@ -277,9 +277,6 @@ struct charger_platform_data {
 	u32 power_dc2otg;
 	u32 dc_det_level;
 	int dc_det_pin;
-	int charge_red_gpio;
-	int charge_green_gpio;
-	int charge_yellow_gpio;
 	bool support_dc_det;
 	int virtual_power;
 	int sample_res;
@@ -337,9 +334,6 @@ struct rk817_charger {
 	int plugin_irq;
 	int plugout_irq;
 };
-
-static int rk817_charge_online(struct rk817_charger *charge);
-static int rk817_charge_get_dsoc(struct rk817_charger *charge);
 
 static enum power_supply_property rk817_ac_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
@@ -427,23 +421,6 @@ static int rk817_charge_usb_get_property(struct power_supply *psy,
 		ret = -EINVAL;
 		break;
 	}
-	
-	//led
-	if( rk817_charge_online(charge) ){
-		gpio_direction_output(charge->pdata->charge_yellow_gpio,1);
-		if(rk817_charge_get_dsoc(charge) == 100)
-			gpio_direction_output(charge->pdata->charge_yellow_gpio,0);
-	}else
-		gpio_direction_output(charge->pdata->charge_yellow_gpio,0);
-	
-	if(rk817_charge_get_dsoc(charge) >= 15){
-		gpio_direction_output(charge->pdata->charge_green_gpio,1);
-		gpio_direction_output(charge->pdata->charge_red_gpio,0);
-	}else{
-		gpio_direction_output(charge->pdata->charge_green_gpio,0);
-		gpio_direction_output(charge->pdata->charge_red_gpio,1);
-	}
-		
 
 	return ret;
 }
@@ -585,7 +562,11 @@ static void rk817_charge_sys_can_sd_disable(struct rk817_charger *charge)
 {
 	rk817_charge_field_write(charge, SYS_CAN_SD, DISABLE);
 }
-
+#define CW2015_CAP
+#ifdef CW2015_CAP
+int cw2015_get_charge_ac_state=0;
+EXPORT_SYMBOL(cw2015_get_charge_ac_state);
+#endif
 static int rk817_charge_get_charge_status(struct rk817_charger *charge)
 {
 	int status;
@@ -1473,42 +1454,6 @@ static int rk817_charge_parse_dt(struct rk817_charger *charge)
 			return -EINVAL;
 		}
 	}
-	
-	if (of_find_property(np, "charge_red_gpio", &ret)) {
-		pdata->charge_red_gpio = of_get_named_gpio_flags(np, "charge_red_gpio",
-							    0, &flags);
-		if (gpio_is_valid(pdata->charge_red_gpio)) {
-			DBG("support charge_red_gpio\n");
-			ret = devm_gpio_request(dev,pdata->charge_red_gpio,"red_led");
-			if (ret < 0) {
-				dev_err(dev, "failed to request gpio %d\n",pdata->charge_red_gpio);
-			}
-		} 
-	}
-	
-	if (of_find_property(np, "charge_green_gpio", &ret)) {
-		pdata->charge_green_gpio = of_get_named_gpio_flags(np, "charge_green_gpio",
-							    0, &flags);
-		if (gpio_is_valid(pdata->charge_green_gpio)) {
-			DBG("support charge_green_gpio\n");
-			ret = devm_gpio_request(dev,pdata->charge_green_gpio,"green_led");
-			if (ret < 0) {
-				dev_err(dev, "failed to request gpio %d\n",pdata->charge_green_gpio);
-			}
-		} 
-	}
-	
-	if (of_find_property(np, "charge_yellow_gpio", &ret)) {
-		pdata->charge_yellow_gpio = of_get_named_gpio_flags(np, "charge_yellow_gpio",
-							    0, &flags);
-		if (gpio_is_valid(pdata->charge_yellow_gpio)) {
-			DBG("support charge_yellow_gpio\n");
-			ret = devm_gpio_request(dev,pdata->charge_yellow_gpio,"yellow_led");
-			if (ret < 0) {
-				dev_err(dev, "failed to request gpio %d\n",pdata->charge_yellow_gpio);
-			}
-		} 
-	}
 
 	DBG("input_current:%d\n"
 		"input_min_voltage: %d\n"
@@ -1539,12 +1484,18 @@ static void rk817_charge_irq_delay_work(struct work_struct *work)
 
 	if (charge->plugin_trigger) {
 		DBG("pmic: plug in\n");
+		#ifdef CW2015_CAP
+		cw2015_get_charge_ac_state=0;
+		#endif
 		charge->plugin_trigger = 0;
 		if (charge->pdata->extcon)
 			queue_delayed_work(charge->usb_charger_wq, &charge->usb_work,
 					   msecs_to_jiffies(10));
 	} else if (charge->plugout_trigger) {
 		DBG("pmic: plug out\n");
+		#ifdef CW2015_CAP
+		cw2015_get_charge_ac_state=1;
+		#endif
 		charge->plugout_trigger = 0;
 		rk817_charge_set_chrg_param(charge, USB_TYPE_NONE_CHARGER);
 		rk817_charge_set_chrg_param(charge, DC_TYPE_NONE_CHARGER);
@@ -1710,22 +1661,6 @@ static int rk817_charge_probe(struct platform_device *pdev)
 
 	rk817_chage_debug(charge);
 	DBG("driver version: %s\n", CHARGE_DRIVER_VERSION);
-	
-	//charge led init 
-	if( rk817_charge_online(charge) )
-		gpio_direction_output(charge->pdata->charge_yellow_gpio,1);
-	else
-		gpio_direction_output(charge->pdata->charge_yellow_gpio,0);
-	
-	if(rk817_charge_get_dsoc(charge) >= 15){
-		gpio_direction_output(charge->pdata->charge_green_gpio,1);
-		gpio_direction_output(charge->pdata->charge_red_gpio,0);
-	}else{
-		gpio_direction_output(charge->pdata->charge_green_gpio,0);
-		gpio_direction_output(charge->pdata->charge_red_gpio,1);
-	}
-		
-			
 
 	return 0;
 irq_fail:
@@ -1759,7 +1694,7 @@ irq_fail:
 	} else {
 		rk_bc_detect_notifier_unregister(&charge->bc_nb);
 	}
-	
+
 	return ret;
 }
 
