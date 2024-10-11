@@ -363,4 +363,9 @@ config JOYSTICK_PXRC
 
 config JOYSTICK_ZED
 	tristate "zed board joystick"
+
+config JOYSTICK_ODROID_GOU
+        tristate "ODROID-Go-Ultra joypad driver"
+        help
+          Made for ODROID-GO-Ultra.
 endif
