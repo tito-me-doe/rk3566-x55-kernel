@@ -30,22 +30,22 @@
 			gpios = <&gpio4 RK_PC3 GPIO_ACTIVE_HIGH>;
 			default-state = "on";
 		};
-		workled {
+		left_joystick {
 			gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_HIGH>;
 			default-state = "on";
 		};		
-		yglled {
+		workled {
 			gpios = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
 			default-state = "on";
 		};
-		ygrled {
+		right_joystick {
 			gpios = <&gpio4 RK_PC5 GPIO_ACTIVE_HIGH>;
 			default-state = "on";
 		};
-		motor {
+		/*motor {
 			gpios = <&gpio3 RK_PC4 GPIO_ACTIVE_HIGH>;
 			default-state = "off";
-		};
+		};*/
 	};
 
 	adc_keys: adc-keys {
@@ -140,6 +140,11 @@
 	joypad: singleadc-joypad {
 		compatible = "singleadc-joypad";
 
+		pwms = <&pwm14 0 200000000 0>;
+		pwm-names = "enable";
+		rumble-boost-weak = <0x0000>;
+		rumble-boost-strong = <0x0000>;
+
 		joypad-name = "retrogame_joypad";
 		joypad-product = <0x1101>;
 		joypad-revision = <0x0100>;
@@ -149,6 +154,7 @@
 		/* gpio pincontrol setup */
 		pinctrl-names = "default";
 		pinctrl-0 = <&btn_pins>;
+		pinctrl-1 = <&pwm14m0_pins>;
 
 		/* Analog mux define */
 		io-channel-names = "amux_adc";
@@ -180,17 +186,17 @@
 		  p = positive direction, n = negative direction
 		  report value = (real_adc_data * tuning_value) / 100
 		*/
-		abs_x-p-tuning = <450>;
-		abs_x-n-tuning = <450>;
+		abs_x-p-tuning = <400>;
+		abs_x-n-tuning = <400>;
 
-		abs_y-p-tuning = <450>;
-		abs_y-n-tuning = <450>;
+		abs_y-p-tuning = <400>;
+		abs_y-n-tuning = <400>;
 
-		abs_rx-p-tuning = <250>;
-		abs_rx-n-tuning = <250>;
+		abs_rx-p-tuning = <400>;
+		abs_rx-n-tuning = <400>;
 
-		abs_ry-p-tuning = <250>;
-		abs_ry-n-tuning = <250>;
+		abs_ry-p-tuning = <400>;
+		abs_ry-n-tuning = <400>;
 
 		/* poll device interval (ms), adc read interval */
 		poll-interval = <10>;
@@ -998,16 +1004,16 @@
 
 		battery {
 			compatible = "rk817,battery";
-			ocv_table = <3500 3524 3552 3579 3601 3618 3635
-				     3656 3682 3717 3764 3815 3854 3886 
-				     3914 3958 4003 4027 4054 4102 4176>;
-			design_capacity = <4605>;
+			ocv_table = <3400 3460 3504 3546 3579 3607 3627
+				     3647 3670 3701 3745 3804 3850 3882 
+				     3907 3959 4005 4024 4050 4106 4187>;
+			design_capacity = <5120>;
 			design_qmax = <5500>;
-			bat_res = <82>;
+			bat_res = <67>;
 			sleep_enter_current = <150>;
 			sleep_exit_current = <180>;
 			sleep_filter_current = <100>;
-			power_off_thresd = <3500>;
+			power_off_thresd = <3400>;
 			zero_algorithm_vol = <3850>;
 			max_soc_offset = <60>;
 			monitor_sec = <5>;
@@ -1258,7 +1264,7 @@
 					<4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>,
 					<4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_up>,
 					<4 RK_PB3 RK_FUNC_GPIO &pcfg_pull_up>,
-					<4 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>,										
+					<4 RK_PB4 RK_FUNC_GPIO &pcfg_pull_up>,
 					<4 RK_PA6 RK_FUNC_GPIO &pcfg_pull_up>,
 					<3 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>,
 					<3 RK_PD4 RK_FUNC_GPIO &pcfg_pull_up>,
@@ -1270,16 +1276,26 @@
 &pmu_io_domains {
 	status = "okay";
 	pmuio1-supply = <&vcc3v3_pmu>;
-	pmuio2-supply = <&vcca1v8_pmu>;
+	pmuio2-supply = <&vcc3v3_pmu>;
 	vccio1-supply = <&vccio_acodec>;
 	vccio3-supply = <&vccio_sd>;
-	vccio4-supply = <&vcca1v8_pmu>;
-	vccio5-supply = <&vcc2v8_dvp>;
+	vccio4-supply = <&vcc_3v3>;
+	vccio5-supply = <&vcc_3v3>;
 	vccio6-supply = <&vcc1v8_dvp>;
 	vccio7-supply = <&vcc_3v3>;
 };
 
+&pwm0 {
+	status = "okay";
+	label = "rumble-pwm";
+};
+
 &pwm4 {
+	status = "okay";
+};
+
+&pwm14 {
+	pinctrl-0 = <&pwm14m0_pins>;
 	status = "okay";
 };
 
@@ -1395,8 +1411,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&uart1m0_xfer &uart1m0_ctsn>;
 };
-
-
 
 /**************************3.0 otg***********************************/
 &usbdrd30 { 

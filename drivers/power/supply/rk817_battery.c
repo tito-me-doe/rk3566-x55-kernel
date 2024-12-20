@@ -1656,32 +1656,49 @@ static void rk817_bat_not_first_pwron(struct rk817_battery_device *battery)
 		ocv_vol = rk817_bat_get_ocv_voltage(battery);
 		ocv_soc = rk817_bat_vol_to_soc(battery, ocv_vol) * 1000;
 		ocv_cap = rk817_bat_vol_to_cap(battery, ocv_vol);
-		DBG("battery->is_ocv_calib ocv_vol=%d, ocv_soc=%d, ocv_cap=%d, pre_soc=%d\n", ocv_vol, ocv_soc, ocv_cap, pre_soc);
-		pre_cap = ocv_cap;
-		battery->ocv_pre_dsoc = pre_soc;
-		battery->ocv_new_dsoc = ocv_soc;
-		if (abs(ocv_soc - pre_soc) >= battery->pdata->max_soc_offset * 1000) {
+		// Sometimes, this value is way too small
+		// It will cause 0% issue
+		// If we got a riduculus small value, skip caliboration
+		// Reduce possiblilty to get 0% when boot
+		if (ocv_cap > 3200) 
+		{
+			DBG("battery->is_ocv_calib ocv_vol=%d, ocv_soc=%d, ocv_cap=%d, pre_soc=%d\n", ocv_vol, ocv_soc, ocv_cap, pre_soc);
+			pre_cap = ocv_cap;
 			battery->ocv_pre_dsoc = pre_soc;
 			battery->ocv_new_dsoc = ocv_soc;
-			battery->is_max_soc_offset = true;
-			DBG("trigger max soc offset, dsoc: %d -> %d\n",
-				 pre_soc, ocv_soc);
-			pre_soc = ocv_soc;
+			if (abs(ocv_soc - pre_soc) >= battery->pdata->max_soc_offset * 1000) {
+				battery->ocv_pre_dsoc = pre_soc;
+				battery->ocv_new_dsoc = ocv_soc;
+				battery->is_max_soc_offset = true;
+				DBG("trigger max soc offset, dsoc: %d -> %d\n",
+					pre_soc, ocv_soc);
+				pre_soc = ocv_soc;
+			}
+			DBG("OCV calib1: cap=%d, rsoc=%d\n", ocv_cap, ocv_soc);
+		} else {
+			DBG("OCV calib1: ocv_vol = %d, which is too small, skip calib\n", ocv_vol);
 		}
-		DBG("OCV calib: cap=%d, rsoc=%d\n", ocv_cap, ocv_soc);
+		
 	} else if (battery->pwroff_min > 0) {
 		ocv_vol = rk817_bat_get_ocv_voltage(battery);
 		ocv_soc = rk817_bat_vol_to_soc(battery, ocv_vol) * 1000;
 		ocv_cap = rk817_bat_vol_to_cap(battery, ocv_vol);
-		battery->force_pre_dsoc = pre_soc;
-		battery->force_new_dsoc = ocv_soc;
-		DBG("battery->pwroff_min ocv_vol=%d, ocv_soc=%d, ocv_cap=%d, pre_soc=%d\n", ocv_vol, ocv_soc, ocv_cap, pre_soc);
-		if (abs(ocv_soc - pre_soc) >= 80000) {
-			battery->is_force_calib = true;
-			DBG("dsoc force calib: %d -> %d\n",
-				 pre_soc, ocv_soc);
-			pre_soc = ocv_soc;
-			pre_cap = ocv_cap;
+		// Similar to above.
+		if (ocv_cap > 3200)
+		{
+			battery->force_pre_dsoc = pre_soc;
+			battery->force_new_dsoc = ocv_soc;
+			DBG("battery->pwroff_min ocv_vol=%d, ocv_soc=%d, ocv_cap=%d, pre_soc=%d\n", ocv_vol, ocv_soc, ocv_cap, pre_soc);
+			if (abs(ocv_soc - pre_soc) >= 80000) {
+				battery->is_force_calib = true;
+				DBG("dsoc force calib: %d -> %d\n",
+					pre_soc, ocv_soc);
+				pre_soc = ocv_soc;
+				pre_cap = ocv_cap;
+			}
+			DBG("OCV calib2: pre_cap=%d, pre_rsoc=%d\n", pre_cap, pre_soc);
+		} else {
+			DBG("OCV calib2: ocv_vol = %d, which is too small, skip calib\n", ocv_vol);
 		}
 	}
 finish:
