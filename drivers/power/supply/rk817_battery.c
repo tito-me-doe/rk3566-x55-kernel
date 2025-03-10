@@ -41,6 +41,9 @@
 
 static int dbg_enable=1;
 
+#define VOLTAG_SET_CAPACITY
+#define VOLTAG_MIN 3500
+#define VOLTAG_MAX 4050
 module_param_named(dbg_level, dbg_enable, int, 0644);
 
 #define DBG(args...) \
@@ -2034,6 +2037,7 @@ static void rk817_bat_get_chrg_psy(struct rk817_battery_device *battery)
 		class_for_each_device(power_supply_class, NULL, (void *)battery,
 				      rk817_bat_get_ac_psy);
 }
+#ifdef IP2315_DET_WORK	
 static int rk817_bat_get_ip2315_charge_state(struct rk817_battery_device *battery)
 {
 	union power_supply_propval val;
@@ -2056,6 +2060,7 @@ static int rk817_bat_get_ip2315_charge_state(struct rk817_battery_device *batter
 
 	return ip2315_charge_state;
 }
+#endif
 static int rk817_bat_get_charge_state(struct rk817_battery_device *battery)
 {
 	union power_supply_propval val;
@@ -2093,10 +2098,23 @@ static int rk817_get_capacity_leve(struct rk817_battery_device *battery)
 
 	if (battery->pdata->bat_mode == MODE_VIRTUAL)
 		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-	else if(rk817_bat_get_ip2315_charge_state(battery)==2){
-		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-		}		
 
+#ifdef VOLTAG_SET_CAPACITY
+	dsoc = (battery->voltage_avg-VOLTAG_MIN+50) / 6;
+	if(dsoc>100)
+	dsoc=100;
+	
+	if (dsoc < 1)
+		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+	else if (dsoc <= 20)
+		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+	else if (dsoc <= 70)
+		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	else if (dsoc <= 90)
+		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
+	else
+		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+#else
 	dsoc = (battery->dsoc + 500) / 1000;
 	if (dsoc < 1)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
@@ -2108,6 +2126,7 @@ static int rk817_get_capacity_leve(struct rk817_battery_device *battery)
 		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
 	else
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+#endif		
 }
 
 static int rk817_battery_time_to_full(struct rk817_battery_device *battery)
@@ -2134,30 +2153,47 @@ static int rk817_battery_get_property(struct power_supply *psy,
 				      union power_supply_propval *val)
 {
 	struct rk817_battery_device *battery = power_supply_get_drvdata(psy);
-
+int temp_volsoc;
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		val->intval = battery->current_avg * 1000;/*uA*/
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
-			val->intval = VIRTUAL_CURRENT * 1000;
+			val->intval = VIRTUAL_CURRENT * 1000;	
+#ifdef IP2315_DET_WORK						
 		else if(rk817_bat_get_ip2315_charge_state(battery)==2){
 		val->intval = VIRTUAL_CURRENT * 1000;
-		}		
+		}
+#endif				
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		val->intval = battery->voltage_avg * 1000;/*uV*/
 		
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_VOLTAGE * 1000;
+#ifdef IP2315_DET_WORK				
 		else if(rk817_bat_get_ip2315_charge_state(battery)==2){
 		val->intval = VIRTUAL_VOLTAGE * 1000;
-		}		
+		}
+#endif				
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = (battery->dsoc  + 500) / 1000;
+#ifdef VOLTAG_SET_CAPACITY			
+		temp_volsoc =(battery->voltage_avg-VOLTAG_MIN+50) / 6;
+		if(abs(val->intval-temp_volsoc)>10){
+		if(val->intval<temp_volsoc)		
+		val->intval=temp_volsoc;
+		}
+		if(val->intval>100)
+		val->intval=100;
+			
+#endif		
+
+#ifdef IP2315_DET_WORK			
 		if(rk817_bat_get_ip2315_charge_state(battery)==2){
 		val->intval = 100;
-		}		
+		}	
+#endif			
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_SOC;
 		break;
@@ -2175,9 +2211,16 @@ static int rk817_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 		if (battery->pdata->bat_mode == MODE_VIRTUAL)
 			val->intval = VIRTUAL_STATUS;
+#ifdef IP2315_DET_WORK				
 	    else if(rk817_bat_get_ip2315_charge_state(battery)==2){
 		val->intval = POWER_SUPPLY_STATUS_FULL;
-		}		
+		}	
+#endif
+#ifdef VOLTAG_SET_CAPACITY					
+	    else if(battery->voltage_avg>=VOLTAG_MAX){
+		val->intval = POWER_SUPPLY_STATUS_FULL;
+		}	
+#endif			
 		else if (battery->dsoc == 100 * 1000)
 			val->intval = POWER_SUPPLY_STATUS_FULL;
 		else {
