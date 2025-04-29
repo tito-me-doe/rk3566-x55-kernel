@@ -363,4 +363,9 @@ config JOYSTICK_PXRC
 
 config JOYSTICK_ZED
 	tristate "zed board joystick"
+
+config JOYSTICK_SINGLEADCJOY
+	tristate "Single SARADC dual-joystick gamepad driver"
+	help
+	  The 1-in 4-out SARADC joypad driver.
 endif

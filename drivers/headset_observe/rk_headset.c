@@ -41,12 +41,14 @@
 #include <linux/earlysuspend.h>
 #endif
 
-/* Debug */
-#if 0
-#define DBG(x...) printk(x)
-#else
-#define DBG(x...) do { } while (0)
-#endif
+static int dbg_enable=1;
+
+#define DBG(args...) \
+	do { \
+		if (dbg_enable) { \
+			pr_info(args); \
+		} \
+	} while (0)
 
 #define BIT_HEADSET             BIT(0)
 #define BIT_HEADSET_NO_MIC      BIT(1)
@@ -85,6 +87,8 @@ struct headset_priv {
 	struct timer_list headset_timer;
 	unsigned char *keycodes;
 };
+
+extern int rk817_headset_detect(int);
 
 static struct headset_priv *headset_info;
 
@@ -157,12 +161,15 @@ static void headsetobserve_work(struct work_struct *work)
 	static unsigned int old_status = 0;
 
 	printk("---headsetobserve_work---\n");
+	DBG("%s\n", __func__);
 	mutex_lock(&headset_info->mutex_lock[HEADSET]);
 	level = read_gpio(pdata->headset_gpio);
+	DBG("%s, level1=%d\n", __func__, level);
 	if (level < 0)
 		goto out;
 	msleep(100);
 	level2 = read_gpio(pdata->headset_gpio);
+	DBG("%s, level2=%d\n", __func__, level);
 	if (level2 < 0)
 		goto out;
 	if (level2 != level)
@@ -172,14 +179,17 @@ static void headsetobserve_work(struct work_struct *work)
 		headset_info->headset_status = level ? HEADSET_IN : HEADSET_OUT;
 	else
 		headset_info->headset_status = level ? HEADSET_OUT : HEADSET_IN;
+	
+	DBG("%s, headset_status=%d\n", __func__, headset_info->headset_status);
 
 	if (old_status == headset_info->headset_status) {
-		pr_warn("old_status == headset_info->headset_status\n");
+		DBG("old_status == headset_info->headset_status\n");
 		goto out;
 	}
 	DBG("(headset in is %s)headset status is %s\n",
 	    pdata->headset_insert_type ? "high level" : "low level",
 	    headset_info->headset_status ? "in" : "out");
+	rk817_headset_detect(headset_info->headset_status);
 	if (headset_info->headset_status == HEADSET_IN) {
 		headset_info->cur_headset_status = BIT_HEADSET_NO_MIC;
 		if (pdata->headset_insert_type == HEADSET_IN_HIGH)

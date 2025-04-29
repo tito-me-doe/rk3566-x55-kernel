@@ -137,6 +137,116 @@ struct fan53555_device_info {
 	unsigned int sleep_vsel_id;
 };
 
+struct i2c_client *g_client;
+
+/*
+static int fan533_i2c_write_bytes(struct i2c_client *client,uint8_t devaddr,uint8_t *data,int len)
+{
+	struct i2c_msg msg;
+	int ret=-1;
+	int retries = 0;
+
+	msg.flags=!I2C_M_RD;
+	msg.addr=devaddr;
+	msg.len=len;
+	msg.buf=data;
+	
+	while(retries<5)
+	{
+		ret=i2c_transfer(client->adapter,&msg, 1);
+		if(ret == 1)break;
+		retries++;
+	}
+	
+   return ret;
+}
+
+
+static int _fan533_write(struct i2c_client *client, uint8_t devaddr,uint8_t addr, uint8_t val)
+{
+	uint8_t buf[2] = {addr, val};
+	int ret;
+
+	ret = fan533_i2c_write_bytes(client,devaddr,buf,2);
+	if (ret < 0) {
+		dev_err(&client->dev, "error %d writing to lvds addr 0x%x\n",ret, addr);
+		return -1;
+	}
+
+	return 0;
+}
+
+
+#define fan533_write(client,devaddr,addr, val) \
+	do { \
+		int ret; \
+		ret = _fan533_write(client,devaddr,addr, val); \
+	} while(0)
+*/
+
+	static int fan533_i2c_read_bytes(struct i2c_client *client, uint8_t devaddr, uint8_t *buf, int len)
+	{
+		struct i2c_msg msgs[2];
+		int ret=-1;
+		int retries = 0;
+	
+		msgs[0].flags = client->flags;
+		msgs[0].addr=devaddr;
+		msgs[0].len=1;
+		msgs[0].buf=&buf[0];
+	
+		msgs[1].flags = client->flags | I2C_M_RD;
+		msgs[1].addr=devaddr;
+		msgs[1].len=len-1;
+		msgs[1].buf=&buf[1];
+		
+		while(retries<5)
+		{
+			ret=i2c_transfer(client->adapter,msgs, 2);
+			if(ret == 2)break;
+			retries++;
+		}
+		return ret;
+	}
+
+
+	static int fan533_read(struct i2c_client *client, uint8_t devaddr,uint8_t addr)
+	{
+		int ret;
+		unsigned char buf[]={addr,0};
+		ret = fan533_i2c_read_bytes(client,devaddr,buf,2);
+		if (ret < 0){
+			printk("fan533_read is fail\n");
+			goto fail;
+		}
+				
+//		printk("%s:i2c_addr:0x%02x--reg:0x%02x--val:0x%02x  ret=%d\n", __FUNCTION__, client->addr, *buf, *(buf+1), ret);
+		return buf[1];	
+	fail:
+		dev_err(&client->dev, "Error %d reading from subaddress devaddr:0x%x:0x%x\n",ret, devaddr,addr);
+		return -1;
+	}
+
+
+int fan533_ChipID(struct i2c_client *client,uint8_t devaddr)
+{
+	int val=0;
+//	fan533_write( client,devaddr,0xff, 0x81);
+	val=fan533_read( client,devaddr,FAN53555_ID1);
+	if (val < 0){
+	return -1;
+	}
+	else printk("fan533 Chip ID1:%x,",val);
+	val=fan533_read( client,devaddr,FAN53555_ID2);
+	if (val < 0){
+	return -1;
+	}
+	else printk("fan533 Chip ID2:%x,",val);	
+
+	
+	return 0;
+}
+
 static unsigned int fan53555_map_mode(unsigned int mode)
 {
 	return mode == REGULATOR_MODE_FAST ?
@@ -638,12 +748,6 @@ static const struct of_device_id fan53555_dt_ids[] = {
 		.compatible = "fcs,fan53555",
 		.data = (void *)FAN53555_VENDOR_FAIRCHILD
 	},  {
-		.compatible = "rockchip,rk8603",
-		.data = (void *)FAN53555_VENDOR_RK,
-	}, {
-		.compatible = "rockchip,rk8604",
-		.data = (void *)FAN53555_VENDOR_RK,
-	}, {
 		.compatible = "silergy,syr827",
 		.data = (void *)FAN53555_VENDOR_SILERGY,
 	}, {
@@ -666,7 +770,7 @@ static int fan53555_regulator_probe(struct i2c_client *client,
 	struct regulator_config config = { };
 	unsigned int val;
 	int ret;
-
+    g_client=client;
 	di = devm_kzalloc(&client->dev, sizeof(struct fan53555_device_info),
 					GFP_KERNEL);
 	if (!di)
@@ -702,7 +806,20 @@ static int fan53555_regulator_probe(struct i2c_client *client,
 
 		di->vendor = id->driver_data;
 	}
-
+	if(fan533_ChipID(client,0x1c)==0){
+    client->addr=0x1c;
+	di->vendor = FAN53555_VENDOR_TCS;
+	}else if(fan533_ChipID(client,0x40)==0){
+	client->addr=0x40;
+	di->vendor = FAN53555_VENDOR_SILERGY;
+	}else if(fan533_ChipID(client,0x41)==0){
+	client->addr=0x41;
+	di->vendor = FAN53555_VENDOR_SILERGY;
+	}else if(fan533_ChipID(client,0x60)==0){
+	client->addr=0x60;
+	di->vendor = FAN53555_VENDOR_FAIRCHILD;
+	}
+	printk("fan53555 addr=%0x\n",client->addr);
 	di->regmap = devm_regmap_init_i2c(client, &fan53555_regmap_config);
 	if (IS_ERR(di->regmap)) {
 		dev_err(&client->dev, "Failed to allocate regmap!\n");
@@ -715,6 +832,8 @@ static int fan53555_regulator_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(&client->dev, "Failed to get chip ID!\n");
 		return ret;
+	}else{
+	printk( "FAN53555_ID1=%x!\n",val); // tcs4525_1c 1c
 	}
 	di->chip_id = val & DIE_ID;
 	/* Get chip revision */
@@ -722,6 +841,8 @@ static int fan53555_regulator_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(&client->dev, "Failed to get chip Rev!\n");
 		return ret;
+	}else{
+	printk( "FAN53555_ID2=%x!\n",val);// tcs4525_1c ff
 	}
 	di->chip_rev = val & DIE_REV;
 	dev_info(&client->dev, "FAN53555 Option[%d] Rev[%d] Detected!\n",
@@ -787,12 +908,6 @@ static const struct i2c_device_id fan53555_id[] = {
 	{
 		.name = "fan53555",
 		.driver_data = FAN53555_VENDOR_FAIRCHILD
-	}, {
-		.name = "rk8603",
-		.driver_data = FAN53555_VENDOR_RK
-	}, {
-		.name = "rk8604",
-		.driver_data = FAN53555_VENDOR_RK
 	}, {
 		.name = "syr827",
 		.driver_data = FAN53555_VENDOR_SILERGY
