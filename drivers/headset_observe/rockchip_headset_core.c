@@ -27,12 +27,14 @@
 #include <linux/gpio.h>
 #include <linux/iio/consumer.h>
 
-/* Debug */
-#if 0
-#define DBG(x...) printk(x)
-#else
-#define DBG(x...) do { } while (0)
-#endif
+static int dbg_enable=1;
+
+#define DBG(args...) \
+	do { \
+		if (dbg_enable) { \
+			pr_info(args); \
+		} \
+	} while (0)
 
 static struct rk_headset_pdata *pdata_info;
 
@@ -52,6 +54,7 @@ static int rockchip_headset_probe(struct platform_device *pdev)
 
 	/* headset */
 	ret = of_get_named_gpio_flags(node, "headset_gpio", 0, &flags);
+	DBG("%s, headset_gpio=%d\n", __func__, ret);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Can not read property headset_gpio\n");
 		goto err;
@@ -136,12 +139,14 @@ static int rockchip_headset_probe(struct platform_device *pdev)
 	if (ret < 0)
 		pdata->headset_wakeup = 1;
 	if (pdata->chan) { /* hook adc mode */
+		DBG("%s, mode=adc", __func__);
 		dev_info(&pdev->dev, "headset have hook adc mode\n");
 		ret = rk_headset_adc_probe(pdev, pdata);
 		if (ret < 0) {
 			goto err;
 		}
 	} else { /* hook interrupt mode and not hook */
+		DBG("%s, mode=interrupt", __func__);
 		dev_info(&pdev->dev, "headset have %s mode\n",
 			 pdata->hook_gpio ? "interrupt hook" : "no hook");
 		ret = rk_headset_probe(pdev, pdata);
